@@ -15,7 +15,7 @@ let nextId = 2;
 let nextCatId = 1;
 
 const defaultCounters = [
-  { id: 1, name: "Counter 1", count: 0, step: 1, stepDown: 1, colorIdx: 0, category: null },
+  { id: 1, name: "Counter 1", count: 0, step: 1, stepDown: 1, colorIdx: 0, category: null, notes: "" },
 ];
 
 function TouchButton({ onAction, style, children, ...rest }) {
@@ -65,6 +65,7 @@ function StepSection({ label, value, inputVal, setInputVal }) {
 
 function SettingsPanel({ counter, categories, onSave, onDelete }) {
   const [inputName, setInputName] = useState(counter.name);
+  const [inputNotes, setInputNotes] = useState(counter.notes ?? "");
   const [draftCategory, setDraftCategory] = useState(counter.category);
   const [draftColorIdx, setDraftColorIdx] = useState(counter.colorIdx);
   const [inputStep, setInputStep] = useState(String(counter.step));
@@ -74,7 +75,7 @@ function SettingsPanel({ counter, categories, onSave, onDelete }) {
     const name = inputName.trim() || counter.name;
     const step = Math.max(0.01, parseFloat(inputStep) || counter.step);
     const stepDown = Math.max(0.01, parseFloat(inputStepDown) || counter.stepDown);
-    onSave({ name, category: draftCategory, colorIdx: draftColorIdx, step, stepDown });
+    onSave({ name, notes: inputNotes, category: draftCategory, colorIdx: draftColorIdx, step, stepDown });
   };
 
   return (
@@ -98,6 +99,23 @@ function SettingsPanel({ counter, categories, onSave, onDelete }) {
             background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.12)",
             borderRadius: 8, padding: "7px 10px", color: "#fff", fontSize: 13,
             outline: "none", fontFamily: "inherit", display: "block",
+          }}
+        />
+      </div>
+
+      {/* Notes */}
+      <div style={{ marginBottom: 12 }}>
+        <label style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", letterSpacing: "0.08em", textTransform: "uppercase", display: "block", marginBottom: 6 }}>Notes</label>
+        <textarea
+          value={inputNotes}
+          onChange={e => setInputNotes(e.target.value)}
+          rows={4}
+          style={{
+            width: "100%", boxSizing: "border-box",
+            background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.12)",
+            borderRadius: 8, padding: "7px 10px", color: "#fff", fontSize: 13,
+            outline: "none", fontFamily: "inherit", display: "block",
+            resize: "vertical",
           }}
         />
       </div>
@@ -398,7 +416,7 @@ export default function App() {
   const addCounter = () => {
     const id = nextId++;
     setCounters(cs => [...cs, {
-      id, name: `Counter ${id}`, count: 0, step: 1, stepDown: 1, colorIdx: 0,
+      id, name: `Counter ${id}`, count: 0, step: 1, stepDown: 1, colorIdx: 0, notes: "",
       category: activeFilter !== "all" ? activeFilter : null,
     }]);
   };
@@ -427,13 +445,21 @@ export default function App() {
       fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif",
       color: "#fff", overflowY: "auto",
     }}>
-      <div style={{ maxWidth: 420, margin: "0 auto", padding: "28px 16px 100px", boxSizing: "border-box" }}>
-        <div style={{ marginBottom: 20 }}>
-          <h1 style={{ margin: "0 0 4px", fontSize: 28, fontWeight: 200, letterSpacing: "-0.03em" }}>Counters</h1>
-          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.25)", letterSpacing: "0.04em" }}>
-            {filteredCounters.length} counter{filteredCounters.length !== 1 ? "s" : ""}
-            {filteredCounters.length > 0 && <> · total <span style={{ color: total > 0 ? "#34c759" : total < 0 ? "#ff453a" : "rgba(255,255,255,0.4)", fontVariantNumeric: "tabular-nums" }}>{total.toLocaleString()}</span></>}
+      <div style={{ maxWidth: 420, margin: "0 auto", padding: "28px 16px 40px", boxSizing: "border-box" }}>
+        <div style={{ marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <h1 style={{ margin: "0 0 4px", fontSize: 28, fontWeight: 200, letterSpacing: "-0.03em" }}>Counters</h1>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.25)", letterSpacing: "0.04em" }}>
+              {filteredCounters.length} counter{filteredCounters.length !== 1 ? "s" : ""}
+              {filteredCounters.length > 0 && <> · total <span style={{ color: total > 0 ? "#34c759" : total < 0 ? "#ff453a" : "rgba(255,255,255,0.4)", fontVariantNumeric: "tabular-nums" }}>{total.toLocaleString()}</span></>}
+            </div>
           </div>
+          <TouchButton onAction={addCounter} style={{
+            background: "#34c759", color: "#fff", fontSize: 22, fontWeight: 300,
+            width: 36, height: 36, borderRadius: "50%",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            boxShadow: "0 4px 16px rgba(52,199,89,0.4)", flexShrink: 0,
+          }}>+</TouchButton>
         </div>
 
         <CategoryManager categories={categories} onAdd={addCategory} onDelete={deleteCategory} />
@@ -472,17 +498,6 @@ export default function App() {
         )}
       </div>
 
-      <div style={{ position: "fixed", bottom: 28, left: "50%", transform: "translateX(-50%)", zIndex: 10 }}>
-        <TouchButton onAction={addCounter} style={{
-          background: "#34c759", borderRadius: 16,
-          color: "#fff", fontSize: 13, fontWeight: 600, padding: "8px 18px",
-          display: "flex", alignItems: "center", gap: 5,
-          fontFamily: "inherit", letterSpacing: "0.02em",
-          boxShadow: "0 4px 16px rgba(52,199,89,0.4)",
-        }}>
-          <span style={{ fontSize: 16, lineHeight: 1 }}>+</span> counter
-        </TouchButton>
-      </div>
     </div>
   );
 }
