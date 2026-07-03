@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 
 const ACCENT_COLORS = [
   { pos: "#34c759", neg: "#ff453a", glow: "rgba(52,199,89,0.5)" },
@@ -349,9 +349,37 @@ function CategoryManager({ categories, onAdd, onDelete }) {
 }
 
 export default function App() {
-  const [counters, setCounters] = useState(defaultCounters);
-  const [categories, setCategories] = useState([]);
+  const [counters, setCounters] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("counterapp_counters"));
+      if (saved && saved.length) {
+        nextId = Math.max(...saved.map(c => c.id)) + 1;
+        return saved;
+      }
+    } catch {}
+    return defaultCounters;
+  });
+
+  const [categories, setCategories] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("counterapp_categories"));
+      if (saved && saved.length) {
+        nextCatId = Math.max(...saved.map(c => c.id)) + 1;
+        return saved;
+      }
+    } catch {}
+    return [];
+  });
+
   const [activeFilter, setActiveFilter] = useState("all");
+
+  useEffect(() => {
+    localStorage.setItem("counterapp_counters", JSON.stringify(counters));
+  }, [counters]);
+
+  useEffect(() => {
+    localStorage.setItem("counterapp_categories", JSON.stringify(categories));
+  }, [categories]);
 
   const updateCounter = useCallback((id, changes) => {
     setCounters(cs => cs.map(c => c.id === id ? { ...c, ...changes } : c));
