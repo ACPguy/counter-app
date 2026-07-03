@@ -353,8 +353,13 @@ export default function App() {
     try {
       const saved = JSON.parse(localStorage.getItem("counterapp_counters"));
       if (saved && saved.length) {
-        nextId = Math.max(...saved.map(c => c.id)) + 1;
-        return saved;
+        const coerced = saved.map(c => ({
+          ...c,
+          id: Number(c.id),
+          category: c.category != null ? Number(c.category) : null,
+        }));
+        nextId = Math.max(...coerced.map(c => c.id)) + 1;
+        return coerced;
       }
     } catch {}
     return defaultCounters;
@@ -364,8 +369,9 @@ export default function App() {
     try {
       const saved = JSON.parse(localStorage.getItem("counterapp_categories"));
       if (saved && saved.length) {
-        nextCatId = Math.max(...saved.map(c => c.id)) + 1;
-        return saved;
+        const coerced = saved.map(c => ({ ...c, id: Number(c.id) }));
+        nextCatId = Math.max(...coerced.map(c => c.id)) + 1;
+        return coerced;
       }
     } catch {}
     return [];
