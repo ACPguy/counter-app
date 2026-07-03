@@ -209,25 +209,25 @@ function CounterCard({ counter, categories, onUpdate, onDelete }) {
       )}
 
       {/* Main row */}
-      <div style={{ display: "flex", alignItems: "center", padding: "14px 12px", gap: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", padding: "8px 12px", gap: 10 }}>
         {/* − */}
         <TouchButton onAction={() => fire(-1)} style={{
-          width: 52, height: 62, borderRadius: 15,
+          width: 46, height: 46, borderRadius: 12,
           background: "linear-gradient(145deg, #ff453a, #e53935)", color: "#fff", fontSize: 28, fontWeight: 300,
           display: "flex", alignItems: "center", justifyContent: "center",
           boxShadow: "0 4px 14px rgba(255,69,58,0.45)", flexShrink: 0,
         }}>−</TouchButton>
 
         {/* Center */}
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", minWidth: 0, overflow: "hidden" }}>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", minWidth: 0 }}>
           <div style={{
-            fontSize: 12, color: "#fff", fontWeight: 700, letterSpacing: "0.05em", marginBottom: 4,
-            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", width: "100%", textAlign: "center",
+            fontSize: 15, color: "#fff", fontWeight: 700, letterSpacing: "0.05em", marginBottom: 4,
+            width: "100%", textAlign: "center",
           }}>{counter.name}</div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <div style={{
-              fontSize: 48, fontWeight: 700, letterSpacing: "-0.03em",
+              fontSize: 32, fontWeight: 400, letterSpacing: "-0.03em",
               color: countColor, lineHeight: 1,
               fontVariantNumeric: "tabular-nums", transition: "color 0.2s",
             }}>{counter.count.toLocaleString()}</div>
@@ -243,7 +243,7 @@ function CounterCard({ counter, categories, onUpdate, onDelete }) {
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
             <span style={{ fontSize: 10, color: "rgba(255,255,255,0.2)", letterSpacing: "0.03em" }}>{stepBadge}</span>
             <TouchButton onAction={reset} style={{
-              background: "none", color: "rgba(255,255,255,0.25)", fontSize: 14, padding: "0 2px",
+              background: "none", color: "rgba(255,255,255,0.25)", fontSize: 20, padding: "0 2px",
               lineHeight: 1, display: "flex", alignItems: "center",
             }}>↺</TouchButton>
           </div>
@@ -251,7 +251,7 @@ function CounterCard({ counter, categories, onUpdate, onDelete }) {
 
         {/* + */}
         <TouchButton onAction={() => fire(1)} style={{
-          width: 52, height: 62, borderRadius: 15,
+          width: 46, height: 46, borderRadius: 12,
           background: `linear-gradient(145deg, ${color.pos}, ${color.pos}bb)`, color: "#fff", fontSize: 28, fontWeight: 300,
           display: "flex", alignItems: "center", justifyContent: "center",
           boxShadow: `0 4px 14px ${color.glow}`, flexShrink: 0,
