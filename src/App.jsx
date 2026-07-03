@@ -120,9 +120,9 @@ function SettingsPanel({ counter, categories, onSave, onDelete }) {
         />
       </div>
 
-      {/* Category */}
+      {/* Group */}
       <div style={{ marginBottom: 12 }}>
-        <label style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", letterSpacing: "0.08em", textTransform: "uppercase", display: "block", marginBottom: 6 }}>Category</label>
+        <label style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", letterSpacing: "0.08em", textTransform: "uppercase", display: "block", marginBottom: 6 }}>Group</label>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           <TouchButton onAction={() => setDraftCategory(null)} style={{
             padding: "5px 12px", borderRadius: 16, fontSize: 12, fontWeight: 500,
@@ -141,9 +141,23 @@ function SettingsPanel({ counter, categories, onSave, onDelete }) {
             </TouchButton>
           ))}
           {categories.length === 0 && (
-            <span style={{ fontSize: 11, color: "rgba(255,255,255,0.2)" }}>No categories yet</span>
+            <span style={{ fontSize: 11, color: "rgba(255,255,255,0.2)" }}>No groups yet</span>
           )}
         </div>
+      </div>
+
+      {/* Save / Delete */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+        <TouchButton onAction={handleSave} style={{
+          flex: 2, padding: "10px", borderRadius: 10,
+          background: "#34c759", color: "#fff",
+          fontSize: 14, fontWeight: 700, fontFamily: "inherit",
+        }}>Save</TouchButton>
+        <TouchButton onAction={onDelete} style={{
+          flex: 1, padding: "10px", borderRadius: 10,
+          background: "rgba(255,69,58,0.15)", color: "#ff453a",
+          fontSize: 13, fontWeight: 500, fontFamily: "inherit",
+        }}>Delete</TouchButton>
       </div>
 
       <StepSection label="+ Step (up)" value={counter.step} inputVal={inputStep} setInputVal={setInputStep} />
@@ -163,20 +177,6 @@ function SettingsPanel({ counter, categories, onSave, onDelete }) {
             }} />
           ))}
         </div>
-      </div>
-
-      {/* Save / Delete */}
-      <div style={{ display: "flex", gap: 8 }}>
-        <TouchButton onAction={handleSave} style={{
-          flex: 2, padding: "10px", borderRadius: 10,
-          background: "#34c759", color: "#fff",
-          fontSize: 14, fontWeight: 700, fontFamily: "inherit",
-        }}>Save</TouchButton>
-        <TouchButton onAction={onDelete} style={{
-          flex: 1, padding: "10px", borderRadius: 10,
-          background: "rgba(255,69,58,0.15)", color: "#ff453a",
-          fontSize: 13, fontWeight: 500, fontFamily: "inherit",
-        }}>Delete</TouchButton>
       </div>
     </div>
   );
@@ -243,27 +243,27 @@ function CounterCard({ counter, categories, onUpdate, onDelete }) {
             width: "100%", textAlign: "center",
           }}>{counter.name}</div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ display: "flex", alignItems: "center", width: "100%" }}>
+            <TouchButton onAction={reset} style={{
+              background: "none", color: "rgba(255,255,255,0.25)", fontSize: 20, padding: "0 2px",
+              lineHeight: 1, display: "flex", alignItems: "center", flexShrink: 0,
+            }}>↺</TouchButton>
             <div style={{
+              flex: 1, textAlign: "center",
               fontSize: 32, fontWeight: 400, letterSpacing: "-0.03em",
               color: countColor, lineHeight: 1,
               fontVariantNumeric: "tabular-nums", transition: "color 0.2s",
             }}>{counter.count.toLocaleString()}</div>
-            <TouchButton onAction={() => setShowSettings(s => !s)} style={{
-              background: showSettings ? "rgba(255,255,255,0.12)" : "none",
-              color: showSettings ? "rgba(255,255,255,0.8)" : "rgba(255,255,255,0.3)",
-              fontSize: 16, padding: "4px 5px", borderRadius: 8,
-              lineHeight: 1, display: "flex", alignItems: "center",
-              transition: "color 0.15s, background 0.15s",
-            }}>⚙</TouchButton>
-          </div>
-
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
-            <span style={{ fontSize: 10, color: "rgba(255,255,255,0.2)", letterSpacing: "0.03em" }}>{stepBadge}</span>
-            <TouchButton onAction={reset} style={{
-              background: "none", color: "rgba(255,255,255,0.25)", fontSize: 20, padding: "0 2px",
-              lineHeight: 1, display: "flex", alignItems: "center",
-            }}>↺</TouchButton>
+            <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+              <TouchButton onAction={() => setShowSettings(s => !s)} style={{
+                background: showSettings ? "rgba(255,255,255,0.12)" : "none",
+                color: showSettings ? "rgba(255,255,255,0.8)" : "rgba(255,255,255,0.3)",
+                fontSize: 16, padding: "4px 5px", borderRadius: 8,
+                lineHeight: 1, display: "flex", alignItems: "center",
+                transition: "color 0.15s, background 0.15s",
+              }}>⚙</TouchButton>
+              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.2)", letterSpacing: "0.03em" }}>{stepBadge}</span>
+            </div>
           </div>
         </div>
 
@@ -311,7 +311,7 @@ function CategoryManager({ categories, onAdd, onDelete }) {
         display: "flex", alignItems: "center", gap: 5,
       }}>
         <span style={{ fontSize: 14, display: "inline-block", transition: "transform 0.2s", transform: open ? "rotate(90deg)" : "rotate(0deg)" }}>›</span>
-        Manage Categories
+        Groups
       </TouchButton>
 
       {open && (
@@ -446,14 +446,8 @@ export default function App() {
       color: "#fff", overflowY: "auto",
     }}>
       <div style={{ maxWidth: 420, margin: "0 auto", padding: "28px 16px 40px", boxSizing: "border-box" }}>
-        <div style={{ marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div>
-            <h1 style={{ margin: "0 0 4px", fontSize: 28, fontWeight: 200, letterSpacing: "-0.03em" }}>Counters</h1>
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.25)", letterSpacing: "0.04em" }}>
-              {filteredCounters.length} counter{filteredCounters.length !== 1 ? "s" : ""}
-              {filteredCounters.length > 0 && <> · total <span style={{ color: total > 0 ? "#34c759" : total < 0 ? "#ff453a" : "rgba(255,255,255,0.4)", fontVariantNumeric: "tabular-nums" }}>{total.toLocaleString()}</span></>}
-            </div>
-          </div>
+        <div style={{ marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <h1 style={{ margin: 0, fontSize: 28, fontWeight: 200, letterSpacing: "-0.03em" }}>Counters</h1>
           <TouchButton onAction={addCounter} style={{
             background: "#34c759", color: "#fff", fontSize: 22, fontWeight: 300,
             width: 36, height: 36, borderRadius: "50%",
@@ -463,6 +457,7 @@ export default function App() {
         </div>
 
         <CategoryManager categories={categories} onAdd={addCategory} onDelete={deleteCategory} />
+
 
         {categories.length > 0 && (
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
