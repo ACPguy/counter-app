@@ -186,18 +186,18 @@ function SettingsPanel({ counter, categories, onSave, onDelete, onClose }) {
         </div>
       </div>
 
-      {/* Save / Delete */}
+      {/* Delete / Save */}
       <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-        <TouchButton onAction={handleSave} style={{
-          flex: 2, padding: "10px", borderRadius: 10,
-          background: "#34c759", color: "#fff",
-          fontSize: 14, fontWeight: 700, fontFamily: "inherit",
-        }}>Save</TouchButton>
         <TouchButton onAction={onDelete} style={{
           flex: 1, padding: "10px", borderRadius: 10,
           background: "rgba(255,69,58,0.15)", color: "#ff453a",
           fontSize: 13, fontWeight: 500, fontFamily: "inherit",
         }}>Delete</TouchButton>
+        <TouchButton onAction={handleSave} style={{
+          flex: 2, padding: "10px", borderRadius: 10,
+          background: "#34c759", color: "#fff",
+          fontSize: 14, fontWeight: 700, fontFamily: "inherit",
+        }}>Save</TouchButton>
       </div>
 
       <StepSection label="+ Step (up)" value={counter.step} inputVal={inputStep} setInputVal={setInputStep} />
