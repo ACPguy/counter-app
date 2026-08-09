@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 
 const ACCENT_COLORS = [
   { pos: "#34c759", neg: "#ff453a", glow: "rgba(52,199,89,0.5)" },
@@ -63,7 +64,7 @@ function StepSection({ label, value, inputVal, setInputVal }) {
   );
 }
 
-function SettingsPanel({ counter, categories, onSave, onDelete }) {
+function SettingsPanel({ counter, categories, onSave, onDelete, onClose }) {
   const [inputName, setInputName] = useState(counter.name);
   const [inputNotes, setInputNotes] = useState(counter.notes ?? "");
   const [draftCategory, setDraftCategory] = useState(counter.category);
@@ -78,14 +79,53 @@ function SettingsPanel({ counter, categories, onSave, onDelete }) {
     onSave({ name, notes: inputNotes, category: draftCategory, colorIdx: draftColorIdx, step, stepDown });
   };
 
-  return (
+  /* Lock the page behind the modal and restore the exact scroll position on close. */
+  useEffect(() => {
+    const scrollY = window.scrollY;
+    const body = document.body;
+    const prevCss = body.style.cssText;
+    body.style.position = "fixed";
+    body.style.top = `-${scrollY}px`;
+    body.style.left = "0";
+    body.style.right = "0";
+    body.style.width = "100%";
+    body.style.overflow = "hidden";
+    return () => {
+      body.style.cssText = prevCss;
+      window.scrollTo(0, scrollY);
+    };
+  }, []);
+
+  /* Portalled to <body>: the card's backdrop-filter would otherwise make it the
+     containing block for position:fixed, and its overflow:hidden would clip us. */
+  return createPortal(
     <div style={{
-      margin: "0 10px 10px", background: "rgba(0,0,0,0.3)", borderRadius: 14,
-      border: "1px solid rgba(255,255,255,0.08)",
-      padding: "14px",
-      boxSizing: "border-box",
-      width: "calc(100% - 20px)",
+      position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 1000,
+      display: "flex", alignItems: "center", justifyContent: "center",
+      padding: 16, boxSizing: "border-box",
+      fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif",
+      color: "#fff",
     }}>
+      {/* Backdrop — tap to close */}
+      <TouchButton onAction={onClose} aria-label="Close settings" style={{
+        position: "absolute", top: 0, left: 0, width: "100%", height: "100%",
+        display: "block", padding: 0, borderRadius: 0,
+        background: "rgba(0,0,0,0.62)",
+        backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)",
+      }} />
+
+      {/* Panel */}
+      <div role="dialog" aria-modal="true" aria-label={`${counter.name} settings`} style={{
+        position: "relative",
+        width: "100%", maxWidth: 420,
+        maxHeight: "85vh", overflowY: "auto", WebkitOverflowScrolling: "touch",
+        background: "rgba(22,32,48,0.82)",
+        backdropFilter: "blur(30px)", WebkitBackdropFilter: "blur(30px)",
+        border: "1px solid rgba(255,255,255,0.12)",
+        borderRadius: 22,
+        boxShadow: "0 20px 60px rgba(0,0,0,0.55)",
+        padding: 16, boxSizing: "border-box",
+      }}>
       {/* Name */}
       <div style={{ marginBottom: 12 }}>
         <label style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", letterSpacing: "0.08em", textTransform: "uppercase", display: "block", marginBottom: 6 }}>Name</label>
@@ -178,7 +218,9 @@ function SettingsPanel({ counter, categories, onSave, onDelete }) {
           ))}
         </div>
       </div>
-    </div>
+      </div>
+    </div>,
+    document.body
   );
 }
 
@@ -202,6 +244,11 @@ function CounterCard({ counter, categories, onUpdate, onDelete }) {
     setShowSettings(false);
   };
 
+  const handleDelete = () => {
+    setShowSettings(false);
+    onDelete(counter.id);
+  };
+
   const stepBadge = counter.step === counter.stepDown ? `×${counter.step}` : `+${counter.step} / −${counter.stepDown}`;
   const countColor = counter.count > 0 ? color.pos : counter.count < 0 ? color.neg : "#fff";
 
@@ -215,16 +262,22 @@ function CounterCard({ counter, categories, onUpdate, onDelete }) {
       overflow: "hidden", transition: "background 0.18s",
     }}>
 
-      {/* Category strip */}
-      {cat && (
-        <div style={{
-          background: cat.color + "22", borderBottom: `1px solid ${cat.color}33`,
-          padding: "4px 14px", display: "flex", alignItems: "center", gap: 6,
-        }}>
-          <span style={{ width: 6, height: 6, borderRadius: "50%", background: cat.color, display: "inline-block" }} />
-          <span style={{ fontSize: 10, color: cat.color, fontWeight: 600, letterSpacing: "0.07em", textTransform: "uppercase" }}>{cat.name}</span>
-        </div>
-      )}
+      {/* Header bar — always rendered, always tappable; blank when there's no group */}
+      <TouchButton onAction={() => setShowSettings(true)} aria-label={`Settings for ${counter.name}`} style={{
+        width: "100%", height: 21, boxSizing: "border-box",
+        display: "flex", alignItems: "center", gap: 6,
+        padding: "0 14px", borderRadius: 0, textAlign: "left",
+        fontFamily: "inherit",
+        background: cat ? cat.color + "22" : "rgba(255,255,255,0.05)",
+        borderBottom: `1px solid ${cat ? cat.color + "33" : "rgba(255,255,255,0.08)"}`,
+      }}>
+        {cat && (
+          <>
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: cat.color, display: "inline-block", flexShrink: 0 }} />
+            <span style={{ fontSize: 10, color: cat.color, fontWeight: 600, letterSpacing: "0.07em", textTransform: "uppercase" }}>{cat.name}</span>
+          </>
+        )}
+      </TouchButton>
 
       {/* Main row */}
       <div style={{ display: "flex", alignItems: "center", padding: "8px 12px", gap: 10 }}>
@@ -255,13 +308,6 @@ function CounterCard({ counter, categories, onUpdate, onDelete }) {
               fontVariantNumeric: "tabular-nums", transition: "color 0.2s",
             }}>{counter.count.toLocaleString()}</div>
             <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-              <TouchButton onAction={() => setShowSettings(s => !s)} style={{
-                background: showSettings ? "rgba(255,255,255,0.12)" : "none",
-                color: showSettings ? "rgba(255,255,255,0.8)" : "rgba(255,255,255,0.3)",
-                fontSize: 16, padding: "4px 5px", borderRadius: 8,
-                lineHeight: 1, display: "flex", alignItems: "center",
-                transition: "color 0.15s, background 0.15s",
-              }}>⚙</TouchButton>
               <span style={{ fontSize: 10, color: "rgba(255,255,255,0.2)", letterSpacing: "0.03em" }}>{stepBadge}</span>
             </div>
           </div>
@@ -276,13 +322,14 @@ function CounterCard({ counter, categories, onUpdate, onDelete }) {
         }}>+</TouchButton>
       </div>
 
-      {/* Settings — rendered inline, no animation clip issue */}
+      {/* Settings — full-screen modal, portalled out of this card */}
       {showSettings && (
         <SettingsPanel
           counter={counter}
           categories={categories}
           onSave={handleSave}
-          onDelete={() => onDelete(counter.id)}
+          onDelete={handleDelete}
+          onClose={() => setShowSettings(false)}
         />
       )}
     </div>
