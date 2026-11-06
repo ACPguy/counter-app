@@ -1,5 +1,35 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
+import {
+  DndContext, DragOverlay, MouseSensor, TouchSensor,
+  useSensor, useSensors, closestCenter, MeasuringStrategy,
+} from "@dnd-kit/core";
+import { SortableContext, useSortable, arrayMove, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+
+const LIFT_GREEN = "#3dd56a";
+const HOLD_MS = 500;
+const MOVE_TOLERANCE_PX = 8;
+
+/* A hold must never start on the + / − buttons (or anything marked data-no-dnd). */
+const startsOnNoDnd = (event) => !!event?.target?.closest?.("[data-no-dnd]");
+
+class HoldTouchSensor extends TouchSensor {
+  static activators = [{
+    eventName: "onTouchStart",
+    handler: (e, opts) => !startsOnNoDnd(e.nativeEvent) && TouchSensor.activators[0].handler(e, opts),
+  }];
+}
+
+class HoldMouseSensor extends MouseSensor {
+  static activators = [{
+    eventName: "onMouseDown",
+    handler: (e, opts) => !startsOnNoDnd(e.nativeEvent) && MouseSensor.activators[0].handler(e, opts),
+  }];
+}
+
+/* Keep the dragged card on a vertical line. */
+const verticalOnly = ({ transform }) => ({ ...transform, x: 0 });
 
 const ACCENT_COLORS = [
   { pos: "#34c759", neg: "#ff453a", glow: "rgba(52,199,89,0.5)" },
@@ -64,7 +94,40 @@ function StepSection({ label, value, inputVal, setInputVal }) {
   );
 }
 
-function SettingsPanel({ counter, categories, onSave, onDelete, onClose }) {
+function ResetButton({ count, onReset }) {
+  const [armed, setArmed] = useState(false);
+  const timer = useRef(null);
+  useEffect(() => () => clearTimeout(timer.current), []);
+
+  const tap = () => {
+    if (count === 0) return;
+    if (!armed) {
+      setArmed(true);
+      clearTimeout(timer.current);
+      timer.current = setTimeout(() => setArmed(false), 3000);
+      return;
+    }
+    clearTimeout(timer.current);
+    setArmed(false);
+    onReset();
+  };
+
+  const isZero = count === 0;
+  return (
+    <TouchButton onAction={tap} disabled={isZero} style={{
+      width: "100%", padding: "10px", borderRadius: 10, marginBottom: 8,
+      fontSize: 13, fontWeight: armed ? 700 : 500, fontFamily: "inherit",
+      background: armed ? "#ff9f0a" : "rgba(255,255,255,0.08)",
+      color: armed ? "#000" : isZero ? "rgba(255,255,255,0.3)" : "#fff",
+      transition: "background 0.15s",
+      cursor: isZero ? "default" : "pointer",
+    }}>
+      {isZero ? "Count is 0" : armed ? "Tap again to reset" : `↺  Reset count to 0  (now ${count.toLocaleString()})`}
+    </TouchButton>
+  );
+}
+
+function SettingsPanel({ counter, categories, onSave, onDelete, onReset, onClose }) {
   const [inputName, setInputName] = useState(counter.name);
   const [inputNotes, setInputNotes] = useState(counter.notes ?? "");
   const [draftCategory, setDraftCategory] = useState(counter.category);
@@ -186,6 +249,9 @@ function SettingsPanel({ counter, categories, onSave, onDelete, onClose }) {
         </div>
       </div>
 
+      {/* Reset (two-tap confirm) */}
+      <ResetButton count={counter.count} onReset={onReset} />
+
       {/* Delete / Save */}
       <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
         <TouchButton onAction={onDelete} style={{
@@ -224,11 +290,73 @@ function SettingsPanel({ counter, categories, onSave, onDelete, onClose }) {
   );
 }
 
-function CounterCard({ counter, categories, onUpdate, onDelete }) {
-  const [showSettings, setShowSettings] = useState(false);
-  const [flash, setFlash] = useState(null);
+/* iOS: no text selection, no callout/magnifier while holding a card. */
+const NO_SELECT = {
+  userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none",
+  WebkitTapHighlightColor: "transparent",
+};
+
+/* The card face. Purely visual: it never opens settings on its own. */
+function CounterCardView({ counter, categories, showDot, onFire, flash }) {
   const color = ACCENT_COLORS[counter.colorIdx % ACCENT_COLORS.length];
-  const cat = categories.find(c => c.id === counter.category);
+  const cat = showDot ? categories.find(c => c.id === counter.category) : null;
+  const stepLabel = counter.step === counter.stepDown
+    ? `step ${counter.step}`
+    : `+${counter.step} / −${counter.stepDown}`;
+  const countColor = counter.count > 0 ? color.pos : counter.count < 0 ? color.neg : "#fff";
+  const btn = {
+    width: 58, height: 58, borderRadius: 16, flexShrink: 0,
+    color: "#fff", fontSize: 32, fontWeight: 300,
+    display: "flex", alignItems: "center", justifyContent: "center",
+  };
+
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 10, padding: 10,
+      borderRadius: 20,
+      background: flash === "pos" ? "rgba(52,199,89,0.08)" : flash === "neg" ? "rgba(255,69,58,0.08)" : "rgba(255,255,255,0.06)",
+      border: "1px solid rgba(255,255,255,0.1)",
+      backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)",
+      boxShadow: "0 8px 32px rgba(0,0,0,0.3)",
+      transition: "background 0.18s",
+      boxSizing: "border-box",
+    }}>
+      <TouchButton data-no-dnd="" aria-label={`Decrease ${counter.name}`} onAction={() => onFire?.(-1)} style={{
+        ...btn,
+        background: "linear-gradient(145deg, #ff453a, #e53935)",
+        boxShadow: "0 4px 14px rgba(255,69,58,0.45)",
+      }}>−</TouchButton>
+
+      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center" }}>
+        <div style={{
+          fontSize: 16, fontWeight: 700, color: "#fff", maxWidth: "100%",
+          display: "flex", alignItems: "center", gap: 6,
+        }}>
+          {cat && <span style={{ width: 7, height: 7, borderRadius: "50%", background: cat.color, flexShrink: 0 }} />}
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{counter.name}</span>
+        </div>
+        <div style={{
+          fontSize: 34, fontWeight: 400, letterSpacing: "-0.03em", lineHeight: 1.1,
+          color: countColor, fontVariantNumeric: "tabular-nums", transition: "color 0.2s",
+        }}>{counter.count.toLocaleString()}</div>
+        <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", letterSpacing: "0.03em" }}>{stepLabel}</div>
+      </div>
+
+      <TouchButton data-no-dnd="" aria-label={`Increase ${counter.name}`} onAction={() => onFire?.(1)} style={{
+        ...btn,
+        background: `linear-gradient(145deg, ${color.pos}, ${color.pos}bb)`,
+        boxShadow: `0 4px 14px ${color.glow}`,
+      }}>+</TouchButton>
+    </div>
+  );
+}
+
+/* A card in the list: sortable. While it is being held/dragged it becomes the
+   green dashed drop slot; the lifted copy is drawn by <DragOverlay>. */
+function SortableCounterCard({ counter, categories, showDot, onUpdate, dimmed }) {
+  const [flash, setFlash] = useState(null);
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: counter.id });
 
   const fire = useCallback((dir) => {
     const amount = dir > 0 ? counter.step : counter.stepDown;
@@ -237,101 +365,53 @@ function CounterCard({ counter, categories, onUpdate, onDelete }) {
     setTimeout(() => setFlash(null), 180);
   }, [counter, onUpdate]);
 
-  const reset = () => onUpdate(counter.id, { count: 0 });
-
-  const handleSave = (changes) => {
-    onUpdate(counter.id, changes);
-    setShowSettings(false);
-  };
-
-  const handleDelete = () => {
-    setShowSettings(false);
-    onDelete(counter.id);
-  };
-
-  const stepBadge = counter.step === counter.stepDown ? `×${counter.step}` : `+${counter.step} / −${counter.stepDown}`;
-  const countColor = counter.count > 0 ? color.pos : counter.count < 0 ? color.neg : "#fff";
-
   return (
-    <div style={{
-      borderRadius: 22,
-      background: flash === "pos" ? "rgba(52,199,89,0.08)" : flash === "neg" ? "rgba(255,69,58,0.08)" : "rgba(255,255,255,0.06)",
-      border: "1px solid rgba(255,255,255,0.1)",
-      backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)",
-      boxShadow: "0 8px 32px rgba(0,0,0,0.3)",
-      overflow: "hidden", transition: "background 0.18s",
-    }}>
-
-      {/* Header bar — always rendered, always tappable; blank when there's no group */}
-      <TouchButton onAction={() => setShowSettings(true)} aria-label={`Settings for ${counter.name}`} style={{
-        width: "100%", height: 21, boxSizing: "border-box",
-        display: "flex", alignItems: "center", gap: 6,
-        padding: "0 14px", borderRadius: 0, textAlign: "left",
-        fontFamily: "inherit",
-        background: cat ? cat.color + "22" : "rgba(255,255,255,0.05)",
-        borderBottom: `1px solid ${cat ? cat.color + "33" : "rgba(255,255,255,0.08)"}`,
-      }}>
-        {cat && (
-          <>
-            <span style={{ width: 6, height: 6, borderRadius: "50%", background: cat.color, display: "inline-block", flexShrink: 0 }} />
-            <span style={{ fontSize: 10, color: cat.color, fontWeight: 600, letterSpacing: "0.07em", textTransform: "uppercase" }}>{cat.name}</span>
-          </>
-        )}
-      </TouchButton>
-
-      {/* Main row */}
-      <div style={{ display: "flex", alignItems: "center", padding: "8px 12px", gap: 10 }}>
-        {/* − */}
-        <TouchButton onAction={() => fire(-1)} style={{
-          width: 46, height: 46, borderRadius: 12,
-          background: "linear-gradient(145deg, #ff453a, #e53935)", color: "#fff", fontSize: 28, fontWeight: 300,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          boxShadow: "0 4px 14px rgba(255,69,58,0.45)", flexShrink: 0,
-        }}>−</TouchButton>
-
-        {/* Center */}
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", minWidth: 0 }}>
-          <div style={{
-            fontSize: 15, color: "#fff", fontWeight: 700, letterSpacing: "0.05em", marginBottom: 4,
-            width: "100%", textAlign: "center",
-          }}>{counter.name}</div>
-
-          <div style={{ display: "flex", alignItems: "center", width: "100%" }}>
-            <TouchButton onAction={reset} style={{
-              background: "none", color: "rgba(255,255,255,0.25)", fontSize: 20, padding: "0 2px",
-              lineHeight: 1, display: "flex", alignItems: "center", flexShrink: 0,
-            }}>↺</TouchButton>
-            <div style={{
-              flex: 1, textAlign: "center",
-              fontSize: 32, fontWeight: 400, letterSpacing: "-0.03em",
-              color: countColor, lineHeight: 1,
-              fontVariantNumeric: "tabular-nums", transition: "color 0.2s",
-            }}>{counter.count.toLocaleString()}</div>
-            <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.2)", letterSpacing: "0.03em" }}>{stepBadge}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* + */}
-        <TouchButton onAction={() => fire(1)} style={{
-          width: 46, height: 46, borderRadius: 12,
-          background: `linear-gradient(145deg, ${color.pos}, ${color.pos}bb)`, color: "#fff", fontSize: 28, fontWeight: 300,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          boxShadow: `0 4px 14px ${color.glow}`, flexShrink: 0,
-        }}>+</TouchButton>
+    <div
+      ref={setNodeRef}
+      data-counter-id={counter.id}
+      {...attributes}
+      {...listeners}
+      onContextMenu={e => e.preventDefault()}
+      style={{
+        ...NO_SELECT,
+        position: "relative",
+        transform: CSS.Translate.toString(transform),
+        transition: [transition, "opacity 0.15s"].filter(Boolean).join(", "),
+        opacity: dimmed ? 0.55 : 1,
+        outline: "none",
+      }}
+    >
+      <div style={{ visibility: isDragging ? "hidden" : "visible" }}>
+        <CounterCardView counter={counter} categories={categories} showDot={showDot} onFire={fire} flash={flash} />
       </div>
-
-      {/* Settings — full-screen modal, portalled out of this card */}
-      {showSettings && (
-        <SettingsPanel
-          counter={counter}
-          categories={categories}
-          onSave={handleSave}
-          onDelete={handleDelete}
-          onClose={() => setShowSettings(false)}
-        />
+      {isDragging && (
+        <div style={{
+          position: "absolute", inset: 0, borderRadius: 20,
+          border: `2px dashed ${LIFT_GREEN}`, background: "rgba(61,213,106,0.07)",
+          boxSizing: "border-box",
+        }} />
       )}
+    </div>
+  );
+}
+
+/* The lifted card that follows the finger. */
+function LiftedCard({ counter, categories, showDot }) {
+  return (
+    <div style={{ ...NO_SELECT, position: "relative", transform: "scale(1.03)" }}>
+      <div style={{
+        position: "absolute", left: "50%", top: -30, transform: "translateX(-50%)",
+        background: LIFT_GREEN, color: "#04210e", whiteSpace: "nowrap",
+        fontSize: 12, fontWeight: 700, padding: "4px 12px", borderRadius: 999,
+        boxShadow: "0 4px 12px rgba(0,0,0,0.4)", pointerEvents: "none",
+      }}>Let go to edit · move to reorder</div>
+      <div style={{
+        borderRadius: 20, border: `2px solid ${LIFT_GREEN}`,
+        boxShadow: "0 18px 50px rgba(0,0,0,0.7), 0 0 0 1px rgba(61,213,106,0.25)",
+        background: "rgba(22,32,48,0.92)", overflow: "hidden",
+      }}>
+        <CounterCardView counter={counter} categories={categories} showDot={showDot} />
+      </div>
     </div>
   );
 }
@@ -483,6 +563,76 @@ export default function App() {
     ? counters
     : counters.filter(c => c.category === activeFilter);
 
+  /* ---- Hold to edit, hold and drag to reorder ---- */
+  const [activeId, setActiveId] = useState(null);
+  const [editingId, setEditingId] = useState(null);
+  const movedRef = useRef(false);
+
+  // Before the hold completes, moving more than the tolerance cancels it and the page scrolls.
+  const holdConstraint = { delay: HOLD_MS, tolerance: MOVE_TOLERANCE_PX };
+  const sensors = useSensors(
+    useSensor(HoldTouchSensor, { activationConstraint: holdConstraint }),
+    useSensor(HoldMouseSensor, { activationConstraint: holdConstraint }),
+  );
+
+  const [hintViews] = useState(() => {
+    const n = Number(localStorage.getItem("counterapp_hint_views")) || 0;
+    localStorage.setItem("counterapp_hint_views", String(n + 1));
+    return n;
+  });
+  const [hintDismissed, setHintDismissed] = useState(false);
+
+  const handleDragStart = ({ active }) => {
+    movedRef.current = false;
+    setActiveId(active.id);
+  };
+
+  const handleDragMove = ({ delta }) => {
+    if (Math.hypot(delta.x, delta.y) >= MOVE_TOLERANCE_PX) movedRef.current = true;
+  };
+
+  const handleDragEnd = ({ active, over }) => {
+    setActiveId(null);
+    const moved = movedRef.current;
+    movedRef.current = false;
+
+    if (!over || active.id === over.id) {
+      // Held and let go without really moving: open settings.
+      if (!moved) {
+        setEditingId(active.id);
+        setHintDismissed(true);
+        localStorage.setItem("counterapp_hint_views", "99");
+      }
+      return;
+    }
+
+    setHintDismissed(true);
+    localStorage.setItem("counterapp_hint_views", "99");
+    setCounters(cs => {
+      const visible = activeFilter === "all" ? cs : cs.filter(c => c.category === activeFilter);
+      const from = visible.findIndex(c => c.id === active.id);
+      const to = visible.findIndex(c => c.id === over.id);
+      if (from < 0 || to < 0) return cs;
+      const reordered = arrayMove(visible, from, to);
+      if (activeFilter === "all") return reordered;
+      // Filtered view: the group keeps the same slots in the global list;
+      // only its members swap places among those slots.
+      let i = 0;
+      return cs.map(c => (c.category === activeFilter ? reordered[i++] : c));
+    });
+  };
+
+  const handleDragCancel = () => {
+    setActiveId(null);
+    movedRef.current = false;
+  };
+
+  const activeCounter = counters.find(c => c.id === activeId) ?? null;
+  const editingCounter = counters.find(c => c.id === editingId) ?? null;
+  const activeCat = activeFilter === "all" ? null : categories.find(c => c.id === activeFilter);
+  const showDot = activeFilter === "all";
+  const showHint = !hintDismissed && hintViews < 3 && filteredCounters.length > 0;
+
   const total = filteredCounters.reduce((sum, c) => sum + c.count, 0);
 
   return (
@@ -527,11 +677,55 @@ export default function App() {
           </div>
         )}
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {filteredCounters.map(counter => (
-            <CounterCard key={counter.id} counter={counter} categories={categories} onUpdate={updateCounter} onDelete={deleteCounter} />
-          ))}
-        </div>
+        {activeCat && (
+          <div style={{
+            display: "flex", alignItems: "center", gap: 6, margin: "0 4px 10px",
+            fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase",
+            color: activeCat.color,
+          }}>
+            <span style={{ width: 7, height: 7, borderRadius: "50%", background: activeCat.color }} />
+            {activeCat.name}
+          </div>
+        )}
+
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
+          modifiers={[verticalOnly]}
+          autoScroll={{ threshold: { x: 0, y: 0.15 }, acceleration: 12 }}
+          onDragStart={handleDragStart}
+          onDragMove={handleDragMove}
+          onDragEnd={handleDragEnd}
+          onDragCancel={handleDragCancel}
+        >
+          <SortableContext items={filteredCounters.map(c => c.id)} strategy={verticalListSortingStrategy}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {filteredCounters.map(counter => (
+                <SortableCounterCard
+                  key={counter.id}
+                  counter={counter}
+                  categories={categories}
+                  showDot={showDot}
+                  onUpdate={updateCounter}
+                  dimmed={activeId != null && activeId !== counter.id}
+                />
+              ))}
+            </div>
+          </SortableContext>
+          {createPortal(
+            <DragOverlay modifiers={[verticalOnly]} dropAnimation={{ duration: 180, easing: "ease-out" }} style={{ zIndex: 900 }}>
+              {activeCounter && <LiftedCard counter={activeCounter} categories={categories} showDot={showDot} />}
+            </DragOverlay>,
+            document.body
+          )}
+        </DndContext>
+
+        {showHint && (
+          <div style={{ textAlign: "center", marginTop: 18, fontSize: 12, color: "rgba(255,255,255,0.3)" }}>
+            Hold a counter to edit or move it
+          </div>
+        )}
 
         {filteredCounters.length === 0 && (
           <div style={{ textAlign: "center", padding: "60px 0", color: "rgba(255,255,255,0.2)", fontSize: 14 }}>
@@ -540,6 +734,18 @@ export default function App() {
         )}
       </div>
 
+      {/* Settings — full-screen modal, opened by hold + release */}
+      {editingCounter && (
+        <SettingsPanel
+          key={editingCounter.id}
+          counter={editingCounter}
+          categories={categories}
+          onSave={(changes) => { updateCounter(editingCounter.id, changes); setEditingId(null); }}
+          onDelete={() => { setEditingId(null); deleteCounter(editingCounter.id); }}
+          onReset={() => updateCounter(editingCounter.id, { count: 0 })}
+          onClose={() => setEditingId(null)}
+        />
+      )}
     </div>
   );
 }
